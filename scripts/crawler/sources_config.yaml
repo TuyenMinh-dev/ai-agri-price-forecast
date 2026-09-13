@@ -1,0 +1,10 @@
+sources:
+  - name: giahotieu
+    url: https://giahotieu.com/
+    crop: ho_tieu
+  - name: banggianongsan
+    url: https://banggianongsan.com/bang-gia-tieu/
+    crop: ho_tieu
+  - name: vietnambiz_gao
+    url: https://vietnambiz.vn/gia-gao.html
+    crop: lua
