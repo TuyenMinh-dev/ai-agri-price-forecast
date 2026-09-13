@@ -43,23 +43,24 @@ Xem chi tiết trong `docs/ROADMAP.md`.
 Xem `docs/CONTRIBUTING.md` — quy tắc nhánh (branch), quy ước commit, cách
 review pull request.
 
-## 6. Bắt đầu nhanh (Getting Started)
+## 6. Hướng dẫn cài đặt
 
 ```bash
-# Clone repo
-git clone <repo-url>
-cd agri-price-forecast
+git clone https://github.com/TuyenMinh-dev/ai-agri-price-forecast.git
+cd ai-agri-price-forecast
 
-# Backend
-cd backend
+# Cài toàn bộ thư viện (dùng chung cho crawler, ml, backend)
 python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+# Backend
+cd backend
+python -m app.main
 
 # Frontend
 cd ../frontend
 npm install
 npm run dev
 ```
-
 Chi tiết cấu hình môi trường xem `docs/SETUP.md`.
