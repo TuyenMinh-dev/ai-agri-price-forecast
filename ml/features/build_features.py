@@ -35,11 +35,14 @@ def load_price_data(crop_type: str) -> pd.DataFrame:
         session.close()
 
     df = pd.DataFrame(
-        rows,
-        columns=["product_id", "category", "price_date", "price_min", "price_max"],
+    rows,
+    columns=["product_id", "category", "price_date", "price_min", "price_max"],
     )
     if df.empty:
         return df
+
+    df["price_min"] = df["price_min"].astype(float)
+    df["price_max"] = df["price_max"].astype(float)
 
     df["price_avg"] = df[["price_min", "price_max"]].mean(axis=1)
     df["price_date"] = pd.to_datetime(df["price_date"])
