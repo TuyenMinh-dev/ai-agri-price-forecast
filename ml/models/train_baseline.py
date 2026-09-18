@@ -1,3 +1,4 @@
+"""Train va so sanh 3 mo hinh du doan gia lua gao: Linear Regression, Random Forest, XGBoost - cung naive baseline."""
 
 import sys
 from pathlib import Path
@@ -5,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 sys.path.append(str(BASE_DIR / "ml" / "features"))
@@ -48,34 +51,61 @@ def compute_metrics(y_true, y_pred) -> dict:
     return {"MAE": mae, "RMSE": rmse, "MAPE (%)": mape}
 
 
+def print_detail_table(test_df: pd.DataFrame, naive_pred, lr_pred, rf_pred, xgb_pred):
+    print("=" * 78)
+    print("CHI TIET: GIA THAT vs GIA TUNG MO HINH DU DOAN (don vi: VND/kg)")
+    print("=" * 78)
+    print(
+        f"{'Loai gao':<12} | {'Ngay':<10} | {'Gia THAT':>9} | "
+        f"{'Linear R.':>9} | {'Random F.':>9} | {'XGBoost':>9}"
+    )
+    print("-" * 78)
+    for i, (_, row) in enumerate(test_df.iterrows()):
+        print(
+            f"{row['category']:<12} | {str(row['price_date'].date()):<10} | "
+            f"{row['target']:>9.2f} | {lr_pred[i]:>9.2f} | {rf_pred[i]:>9.2f} | "
+            f"{xgb_pred[i]:>9.2f}"
+        )
+    print("=" * 78)
+
+
+def print_summary_table(results: dict, best_model: str):
+    print()
+    print("TONG HOP: MUC DO SAI LECH TRUNG BINH CUA TUNG MO HINH")
+    print("=" * 78)
+    print(f"{'Mo hinh':<20} | {'Sai so TB':>12} | {'Sai so RMSE':>12} | {'Sai so %':>9}")
+    print(f"{'':<20} | {'(VND/kg)':>12} | {'(VND/kg)':>12} | {'':>9}")
+    print("-" * 78)
+    for name, m in results.items():
+        marker = "  <-- TOT NHAT" if name == best_model else ""
+        print(
+            f"{name:<20} | {m['MAE']:>12.2f} | {m['RMSE']:>12.2f} | "
+            f"{m['MAPE (%)']:>8.2f}%{marker}"
+        )
+    print("=" * 78)
+    print("Giai thich cac chi so:")
+    print("  - Sai so TB (MAE)   : trung binh moi lan doan lech bao nhieu VND/kg")
+    print("  - Sai so RMSE       : giong MAE nhung 'phat nang' neu co lan doan sai rat xa")
+    print("  - Sai so % (MAPE)   : sai lech tinh theo % so voi gia that")
+    print("=" * 78)
+    print(f"\n=> Mo hinh tot nhat (sai so thap nhat): {best_model}")
+
+
 def main():
-    print("Đang lấy dữ liệu giá lúa gạo từ CSDL...")
+    print("Dang lay du lieu gia lua gao tu CSDL...")
     df = load_price_data(crop_type="rice")
 
     if df.empty:
-        print("Không có dữ liệu giá lúa gạo trong CSDL. Hãy chạy crawler và "
-              "load_crawler_data.py trước.")
+        print("Khong co du lieu gia lua gao trong CSDL. Hay chay crawler va "
+              "load_crawler_data.py truoc.")
         return
 
     features = build_features(df)
-    print(f"Số dòng dữ liệu đủ điều kiện để train/test: {len(features)}")
-
-    if len(features) < 4:
-        print(
-            "\nCẢNH BÁO: dữ liệu quá ít (< 4 dòng) để chia train/test có ý "
-            "nghĩa. Kết quả dưới đây CHỈ để kiểm tra pipeline chạy được, "
-            "không phản ánh độ chính xác thật. Chạy lại script này sau khi "
-            "crawler tích luỹ thêm vài tuần dữ liệu."
-        )
+    print(f"So dong du lieu du dieu kien de train/test: {len(features)}\n")
 
     train_df, test_df = train_test_split_by_time(features, TEST_SIZE_RATIO)
 
     if test_df.empty:
-        print(
-            "\nKhông đủ dữ liệu để tạo tập test riêng. Dùng tạm toàn bộ dữ "
-            "liệu để xem thử model học được gì, KHÔNG dùng để đánh giá độ "
-            "chính xác."
-        )
         test_df = train_df.copy()
 
     X_train = train_df[FEATURE_COLUMNS]
@@ -83,38 +113,33 @@ def main():
     X_test = test_df[FEATURE_COLUMNS]
     y_test = test_df[TARGET_COLUMN]
 
-    naive_pred = X_test["lag_1"]
-    naive_metrics = compute_metrics(y_test, naive_pred)
+    naive_pred = X_test["lag_1"].to_numpy()
 
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-    lr_pred = model.predict(X_test)
-    lr_metrics = compute_metrics(y_test, lr_pred)
+    lr_model = LinearRegression()
+    lr_model.fit(X_train, y_train)
+    lr_pred = lr_model.predict(X_test)
 
-    print("\n" + "=" * 50)
-    print("SO SÁNH KẾT QUẢ")
-    print("=" * 50)
-    print(f"{'Mô hình':<25} {'MAE':>10} {'RMSE':>10} {'MAPE (%)':>10}")
-    print(
-        f"{'Naive (giá lần trước)':<25} "
-        f"{naive_metrics['MAE']:>10.2f} {naive_metrics['RMSE']:>10.2f} "
-        f"{naive_metrics['MAPE (%)']:>10.2f}"
+    rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf_model.fit(X_train, y_train)
+    rf_pred = rf_model.predict(X_test)
+
+    xgb_model = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
+    xgb_model.fit(X_train, y_train)
+    xgb_pred = xgb_model.predict(X_test)
+
+    print_detail_table(test_df, naive_pred, lr_pred, rf_pred, xgb_pred)
+
+    results = {
+        "Naive": compute_metrics(y_test, naive_pred),
+        "Linear Regression": compute_metrics(y_test, lr_pred),
+        "Random Forest": compute_metrics(y_test, rf_pred),
+        "XGBoost": compute_metrics(y_test, xgb_pred),
+    }
+    best_model = min(
+        (name for name in results if name != "Naive"),
+        key=lambda n: results[n]["MAE"],
     )
-    print(
-        f"{'Linear Regression':<25} "
-        f"{lr_metrics['MAE']:>10.2f} {lr_metrics['RMSE']:>10.2f} "
-        f"{lr_metrics['MAPE (%)']:>10.2f}"
-    )
-    print("=" * 50)
-
-    if lr_metrics["MAE"] < naive_metrics["MAE"]:
-        print("=> Linear Regression đang tốt hơn naive baseline.")
-    else:
-        print(
-            "=> Linear Regression CHƯA tốt hơn naive baseline - bình thường "
-            "khi dữ liệu còn ít, sẽ cải thiện khi có thêm dữ liệu và thêm "
-            "các mô hình khác (Random Forest/XGBoost)."
-        )
+    print_summary_table(results, best_model)
 
 
 if __name__ == "__main__":
