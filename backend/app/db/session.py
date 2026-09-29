@@ -25,3 +25,12 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
+
+
+def get_db():
+    """Dependency cung cấp DB session cho mỗi request, tự đóng sau khi xong."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
