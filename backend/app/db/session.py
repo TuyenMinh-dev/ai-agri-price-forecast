@@ -23,7 +23,11 @@ if not DATABASE_URL:
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,   # Ping CSDL trước mỗi query, tự mở lại nếu kết nối chết
+    pool_recycle=300,     # Tự làm mới kết nối sau 5 phút để tránh bị cloud timeout
+)
 SessionLocal = sessionmaker(bind=engine)
 
 
