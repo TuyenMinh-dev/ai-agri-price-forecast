@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.db.session import get_db
-from backend.app.models.tables import Forecast, Product
-from backend.app.schemas.price import ForecastOut
+from app.db.session import get_db
+from app.models.tables import Forecast, Product
+from app.schemas.price import ForecastOut
 
 router = APIRouter(prefix="/api/forecasts", tags=["forecasts"])
 

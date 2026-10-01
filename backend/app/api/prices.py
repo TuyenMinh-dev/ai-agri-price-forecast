@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.db.session import get_db
-from backend.app.models.tables import MarketPrice, Product
-from backend.app.schemas.price import LatestPriceOut, PriceHistoryOut
+from app.db.session import get_db
+from app.models.tables import MarketPrice, Product
+from app.schemas.price import LatestPriceOut, PriceHistoryOut
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
 
