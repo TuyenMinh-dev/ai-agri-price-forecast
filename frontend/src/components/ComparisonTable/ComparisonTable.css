@@ -1,0 +1,13 @@
+.ct { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; transition: background 0.2s; }
+.ct-head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 18px; }
+.ct-head h2 { font-size: 16px; font-weight: 600; }
+.ct-head span { font-size: 12px; color: var(--muted); }
+.ct-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ct-table th { padding: 10px 18px; text-align: left; font-size: 13px; font-weight: 600; background: var(--head-bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.ct-table td { padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.ct-table tbody tr:last-child td { border-bottom: 0; }
+.ct-table tbody tr { transition: background 0.15s; }
+.ct-table tbody tr:hover { background: var(--hover); }
+.ct-table .num { text-align: right; }
+.ct-trend { font-weight: 600; }
+.ct-none { text-align: center; font-size: 13px; color: var(--muted); }
