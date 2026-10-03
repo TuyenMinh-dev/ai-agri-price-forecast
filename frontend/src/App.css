@@ -1,0 +1,3 @@
+.app-main { margin-left: 240px; min-height: 100vh; }
+.app-content { padding: 24px 28px 40px; }
+.app-empty { padding: 100px 0; text-align: center; color: var(--muted); }

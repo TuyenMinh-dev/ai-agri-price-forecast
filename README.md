@@ -1,5 +1,5 @@
 # Website hỗ trợ cập nhật thông tin thị trường và dự báo giá nông sản
-
+# chạy backend: uvicorn app.main:app
 ## 1. Tổng quan dự án
 
 Hệ thống web hỗ trợ nông dân và thương lái theo dõi thông tin thị trường và

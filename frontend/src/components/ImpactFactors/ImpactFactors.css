@@ -1,0 +1,12 @@
+.if { padding: 16px 18px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; transition: background 0.2s; }
+.if h2 { margin-bottom: 2px; font-size: 16px; font-weight: 600; }
+.if-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.if-table th { padding: 8px 10px; text-align: left; font-weight: 600; background: var(--head-bg); border-bottom: 1px solid var(--border); }
+.if-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); }
+.if-table tbody tr:last-child td { border-bottom: 0; }
+.if-weight { display: flex; align-items: center; gap: 8px; }
+.if-bar { flex: 1; height: 6px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.if-bar div { height: 100%; background: var(--primary); }
+.if-weight span { width: 34px; text-align: right; }
+.if-dir { font-weight: 600; white-space: nowrap; }
+.if-note { margin-bottom: 12px; font-size: 12px; color: var(--warning); }

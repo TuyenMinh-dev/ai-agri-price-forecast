@@ -1,0 +1,21 @@
+.ch { padding: 16px 18px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; transition: background 0.2s; }
+.ch-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.ch-head h2 { font-size: 16px; font-weight: 600; }
+.ch-head p { margin-top: 3px; font-size: 13px; color: var(--muted); }
+.ch-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+.ch-legend span { display: flex; align-items: center; gap: 6px; }
+.ch-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--primary); }
+.ch-key.dashed { border-top-style: dashed; }
+.ch-key.band { height: 8px; border: 0; background: var(--primary); opacity: 0.2; }
+.ch-wrap { position: relative; }
+.ch-wrap svg { display: block; width: 100%; height: auto; }
+.ch-grid { stroke: var(--border); stroke-width: 1; }
+.ch-txt { fill: var(--muted); font-size: 12px; font-family: Consolas, monospace; }
+.ch-line { fill: none; stroke: var(--primary); stroke-width: 2.25; stroke-linejoin: round; }
+.ch-pred { stroke-dasharray: 6 5; }
+.ch-ci { fill: var(--primary); fill-opacity: 0.15; }
+.ch-today { stroke: var(--muted); stroke-dasharray: 3 4; opacity: 0.6; }
+.ch-pt { fill: var(--primary); cursor: pointer; }
+.ch-pt.pred { fill: var(--card-bg); stroke: var(--primary); stroke-width: 2; }
+.ch-tip { position: absolute; z-index: 2; padding: 8px 10px; border-radius: 4px; background: var(--card-bg); border: 1px solid var(--border); font-size: 12px; line-height: 1.7; white-space: nowrap; pointer-events: none; }
+.ch-note { margin: 4px 0 8px; font-size: 12px; color: var(--warning); }
