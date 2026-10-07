@@ -52,21 +52,39 @@ def compute_metrics(y_true, y_pred) -> dict:
 
 
 def print_detail_table(test_df: pd.DataFrame, naive_pred, lr_pred, rf_pred, xgb_pred):
-    print("=" * 78)
-    print("CHI TIET: GIA THAT vs GIA TUNG MO HINH DU DOAN (don vi: VND/kg)")
-    print("=" * 78)
-    print(
-        f"{'Loai gao':<12} | {'Ngay':<10} | {'Gia THAT':>9} | "
-        f"{'Linear R.':>9} | {'Random F.':>9} | {'XGBoost':>9}"
-    )
-    print("-" * 78)
+    has_range = "price_min" in test_df.columns and "price_max" in test_df.columns
+
+    print("=" * 90)
+    print("CHI TIET: KHOANG GIA THAT vs GIA TUNG MO HINH DU DOAN (don vi: VND/kg)")
+    print("=" * 90)
+    header = f"{'Loai gao':<12} | {'Ngay':<10} | "
+    header += f"{'Khoang that':>15} | " if has_range else f"{'Gia THAT(tb)':>12} | "
+    header += f"{'Linear R.':>9} | {'Random F.':>9} | {'XGBoost':>9}"
+    print(header)
+    print("-" * 90)
+
     for i, (_, row) in enumerate(test_df.iterrows()):
-        print(
-            f"{row['category']:<12} | {str(row['price_date'].date()):<10} | "
-            f"{row['target']:>9.2f} | {lr_pred[i]:>9.2f} | {rf_pred[i]:>9.2f} | "
-            f"{xgb_pred[i]:>9.2f}"
-        )
-    print("=" * 78)
+        line = f"{row['category']:<12} | {str(row['price_date'].date()):<10} | "
+        if has_range:
+            pmin, pmax = row.get("price_min"), row.get("price_max")
+            range_str = (
+                f"[{pmin:,.0f}-{pmax:,.0f}]"
+                if pd.notna(pmin) and pd.notna(pmax)
+                else "N/A"
+            )
+            line += f"{range_str:>15} | "
+        else:
+            line += f"{row['target']:>12.2f} | "
+        line += f"{lr_pred[i]:>9.2f} | {rf_pred[i]:>9.2f} | {xgb_pred[i]:>9.2f}"
+        print(line)
+
+    print("=" * 90)
+
+    if has_range:
+        print("Ghi chu: 'Khoang that' la [gia thap nhat - gia cao nhat] thuc te trong")
+        print("ngay do - du doan nam trong khoang nay co the coi la chap nhan duoc, du")
+        print("khong trung khop tuyet doi 1 con so.")
+        print("=" * 90)
 
 
 def print_summary_table(results: dict, best_model: str):
