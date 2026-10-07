@@ -49,7 +49,11 @@ def load_price_data(crop_type: str) -> pd.DataFrame:
 
     df = (
         df.groupby(["product_id", "category", "price_date"], as_index=False)
-        .agg(price_avg=("price_avg", "mean"))
+        .agg(
+            price_avg=("price_avg", "mean"),
+            price_min=("price_min", "mean"),
+            price_max=("price_max", "mean"),
+        )
     )
 
     return df.sort_values(["category", "price_date"]).reset_index(drop=True)
