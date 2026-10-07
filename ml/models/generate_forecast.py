@@ -1,4 +1,5 @@
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -26,22 +27,21 @@ MODEL_BUILDERS = {
 }
 
 
-def build_next_day_row(group: pd.DataFrame) -> dict:
-    """Tao 1 dong feature de du doan gia ngay ke tiep, dua tren toi da 3 gia gan nhat."""
-    group = group.sort_values("price_date")
-    last_prices = group["price_avg"].tail(3).tolist()
-    forecast_date = group["price_date"].max() + pd.Timedelta(days=1)
+def steps_needed_to_reach_tomorrow(last_known_date) -> int:
+    """Tinh so buoc du bao can thiet de 'bat kip' dung ngay mai THAT (theo
+    dong ho may), khong chi dua vao ngay du lieu moi nhat dang co.
 
-    return {
-        "lag_1": last_prices[-1],
-        "rolling_mean_3": sum(last_prices) / len(last_prices),
-        "day_of_week": forecast_date.dayofweek,
-        "forecast_date": forecast_date.date(),
-    }
+    """
+    last_date = last_known_date.date() if hasattr(last_known_date, "date") else last_known_date
+    target_date = date.today() + timedelta(days=1)
+    steps = (target_date - last_date).days
+    return max(steps, 1)
 
 
 def forecast_category(product_id: int, group: pd.DataFrame, features: pd.DataFrame) -> list[dict]:
-    """Train 3 model bang TOAN BO du lieu cua 1 category, du doan gia ngay mai."""
+    """Train 3 model bang TOAN BO du lieu cua 1 category, du doan gia cho
+    DUNG ngay mai that - neu du lieu dang bi thieu vai ngay thi tu dong du
+    bao de quy nhieu buoc de bu lai, khong con bi 'dung' o ngay cu."""
     cat_features = features[features["product_id"] == product_id]
     if cat_features.empty:
         return []
@@ -49,20 +49,43 @@ def forecast_category(product_id: int, group: pd.DataFrame, features: pd.DataFra
     X_train = cat_features[FEATURE_COLUMNS]
     y_train = cat_features[TARGET_COLUMN]
 
-    next_row = build_next_day_row(group)
-    X_pred = pd.DataFrame([{k: next_row[k] for k in FEATURE_COLUMNS}])
+    group = group.sort_values("price_date")
+    steps = steps_needed_to_reach_tomorrow(group["price_date"].max())
 
     results = []
     for model_name, build_model in MODEL_BUILDERS.items():
         model = build_model()
         model.fit(X_train, y_train)
-        predicted_price = float(model.predict(X_pred)[0])
+
+        # Du bao de quy: moi buoc dung chinh ket qua buoc truoc lam input -
+        # neu steps == 1 (truong hop binh thuong) thi chi chay dung 1 lan,
+        # ket qua y het cach lam cu.
+        step_prices = group["price_avg"].tolist()
+        step_dates = list(group["price_date"])
+        predicted_price = None
+        for _ in range(steps):
+            next_date = step_dates[-1] + pd.Timedelta(days=1)
+            last3 = step_prices[-3:]
+            row = pd.DataFrame(
+                [
+                    {
+                        "lag_1": step_prices[-1],
+                        "rolling_mean_3": sum(last3) / len(last3),
+                        "day_of_week": next_date.dayofweek,
+                    }
+                ]
+            )
+            predicted_price = float(model.predict(row[FEATURE_COLUMNS])[0])
+            step_prices.append(predicted_price)
+            step_dates.append(next_date)
+
         results.append(
             {
                 "product_id": product_id,
-                "forecast_date": next_row["forecast_date"],
+                "forecast_date": step_dates[-1].date(),
                 "predicted_price": round(predicted_price, 2),
                 "model_name": model_name,
+                "steps_used": steps,
             }
         )
     return results
@@ -81,10 +104,11 @@ def save_forecasts(session, forecasts: list[dict]) -> int:
             )
             .first()
         )
+        payload = {k: v for k, v in f.items() if k != "steps_used"}
         if existing:
-            existing.predicted_price = f["predicted_price"]
+            existing.predicted_price = payload["predicted_price"]
         else:
-            session.add(Forecast(**f))
+            session.add(Forecast(**payload))
     return len(forecasts)
 
 
@@ -108,6 +132,13 @@ def main():
             if not cat_forecasts:
                 print(f"  Bo qua {category}: chua du du lieu de train (can >= 2 dong sau khi tao feature).")
                 continue
+
+            steps = cat_forecasts[0]["steps_used"]
+            if steps > 1:
+                print(
+                    f"  CANH BAO [{category}]: Hiện đang thiếu dữ liệu thực tế {steps - 1} ngày "
+                    f"-> Độ chính xác có thể thấp hơn bình thường"
+                )
 
             for f in cat_forecasts:
                 print(
