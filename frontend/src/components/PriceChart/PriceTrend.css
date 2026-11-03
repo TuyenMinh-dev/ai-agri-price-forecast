@@ -1,0 +1,13 @@
+.pt-head { align-items: flex-end; }
+.pt-headline { display: flex; align-items: baseline; gap: 16px; padding: 14px 16px 0; }
+.pt-price { font-size: 26px; font-weight: 600; line-height: 1.2; }
+.pt-price small { font-size: 13px; font-weight: 400; color: var(--ink-2); }
+.pt-asof, .pt-delta small { font-size: 12px; color: var(--ink-2); }
+.pt-delta { font-size: 15px; }
+.pt-stats { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--rule); }
+.pt-stats > div { padding: 12px 16px; border-right: 1px solid var(--rule-soft); }
+.pt-stats > div:last-child { border-right: 0; }
+.pt-stats dt { font-size: 12px; color: var(--ink-2); }
+.pt-stats dd { margin-top: 2px; font-size: 17px; font-weight: 600; }
+.pt-body { padding: 10px 16px 14px; }
+.pt-empty { padding: 60px 0; text-align: center; color: var(--ink-2); }

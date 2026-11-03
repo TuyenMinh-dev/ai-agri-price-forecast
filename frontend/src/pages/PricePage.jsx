@@ -1,70 +1,93 @@
-import { useEffect, useState } from 'react'
-import { getPriceList } from '../api/priceApi'
-import { formatNumber, matchesQuery } from '../utils/format'
+import { useState } from 'react'
+import Delta from '../components/Delta/Delta'
+import PageState from '../components/PageState/PageState'
+import Select from '../components/Select/Select'
+import useApi from '../utils/useApi'
+import { cropLabel, loadPrices, sortCrops } from '../api/priceApi'
+import { changesByDate } from '../utils/market'
+import { addDays, formatNumber, formatUnit, matchesQuery, showDate } from '../utils/format'
 import './PricePage.css'
 
-export default function PricePage({ query }) {
-  const [group, setGroup] = useState('all')
-  const [type, setType] = useState('Tất cả')
-  const [state, setState] = useState({ status: 'loading', data: null })
+const RANGES = [
+  { value: 'latest', label: 'Mới nhất' },
+  ...[7, 30, 90].map(d => ({ value: String(d), label: `${d} ngày` })),
+]
 
-  useEffect(() => {
-    getPriceList()
-      .then(data => setState({ status: data?.rows?.length ? 'ready' : 'empty', data }))
-      .catch(() => setState({ status: 'error', data: null }))
-  }, [])
+export default function PricePage() {
+  const { status, data, error } = useApi(loadPrices)
+  const [crop, setCrop] = useState('all')
+  const [productId, setProductId] = useState('all')
+  const [range, setRange] = useState('latest')
+  const [query, setQuery] = useState('')
 
-  const { status, data } = state
-  if (status === 'loading') return <p className="pp-status">Đang tải dữ liệu...</p>
-  if (status === 'error') return <p className="pp-status down">Không tải được dữ liệu từ backend. Hãy kiểm tra backend đã chạy chưa rồi tải lại trang.</p>
-  if (status === 'empty') return <p className="pp-status">Chưa có dữ liệu giá để hiển thị.</p>
+  const empty = status === 'ready' && data.latest.length === 0 && 'Backend chưa có dữ liệu giá.'
+  if (status !== 'ready' || empty) return <PageState status={status} error={error} empty={empty} />
 
-  const groupLabel = id => data.groups.find(g => g.id === id)?.label ?? id
-  const types = group === 'all' ? [] : ['Tất cả', ...data.typesByGroup[group]]
-  const rows = data.rows.filter(r => (group === 'all' || r.group === group) && (type === 'Tất cả' || r.type === type) && matchesQuery(`${groupLabel(r.group)} ${r.type}`, query))
+  const { latest, history, lastDate } = data
+  const crops = sortCrops(new Set(latest.map(p => p.crop)))
+  const products = latest.filter(p => crop === 'all' || p.crop === crop)
 
-  const chooseGroup = id => { setGroup(id); setType('Tất cả') }
+  // Thay đổi so với ngày liền trước, tính trên toàn bộ lịch sử của từng sản phẩm
+  const changes = new Map(history.map(h => [h.productId, changesByDate(h.rows)]))
+  const withChange = r => ({ ...r, change: changes.get(r.productId)?.get(r.date) ?? null })
+
+  // "Mới nhất": mỗi sản phẩm một dòng; còn lại: lịch sử trong N ngày gần nhất
+  const cutoff = range === 'latest' ? null : addDays(lastDate, -(Number(range) - 1))
+  const source = range === 'latest'
+    ? latest
+    : history.flatMap(h => h.rows.filter(r => r.date >= cutoff).map(r => ({ ...r, productId: h.productId, crop: h.crop, name: h.name, unit: latest.find(p => p.productId === h.productId)?.unit })))
+
+  const rows = source
+    .filter(r => (crop === 'all' || r.crop === crop) && (productId === 'all' || String(r.productId) === productId))
+    .filter(r => matchesQuery(`${cropLabel(r.crop)} ${r.name}`, query))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.productId - b.productId)
+    .map(withChange)
 
   return (
-    <div className="pp">
-      <div>
-        <h1>Giá nông sản</h1>
-        <p>Giá thấp nhất và cao nhất theo loại lúa gạo, cà phê (30 ngày gần nhất)</p>
-      </div>
-
-      <div className="pp-filters">
-        <div className="pp-tabs">
-          {[{ id: 'all', label: 'Tất cả' }, ...data.groups].map(g => (
-            <button key={g.id} className={g.id === group ? 'on' : ''} onClick={() => chooseGroup(g.id)}>{g.label}</button>
-          ))}
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <h1>Bảng giá</h1>
+          <p>Giá thấp nhất và cao nhất theo từng sản phẩm</p>
         </div>
-        {types.length > 0 && (
-          <div className="pp-tabs">
-            {types.map(t => (
-              <button key={t} className={t === type ? 'on' : ''} onClick={() => setType(t)}>{t}</button>
-            ))}
-          </div>
-        )}
+        <span className="page-meta">Cập nhật: {showDate(lastDate)}</span>
       </div>
 
-      <section className="pp-card">
-        <table className="pp-table">
-          <thead>
-            <tr><th>Nhóm</th><th>Loại</th><th>Ngày</th><th className="num">Giá thấp nhất</th><th className="num">Giá cao nhất</th></tr>
-          </thead>
-          <tbody>
-            {rows.map(r => (
-              <tr key={r.group + r.type + r.date}>
-                <td>{groupLabel(r.group)}</td>
-                <td>{r.type}</td>
-                <td>{r.date}</td>
-                <td className="num mono">{formatNumber(r.min)} đ</td>
-                <td className="num mono">{formatNumber(r.max)} đ</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <section className="panel">
+        <div className="panel-head pp-tools">
+          <label className="pp-search">
+            <span>Tìm kiếm</span>
+            <div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Nhập tên nông sản hoặc sản phẩm..." />
+            </div>
+          </label>
+          <Select label="Loại nông sản" value={crop} onChange={c => { setCrop(c); setProductId('all') }} options={[{ value: 'all', label: 'Tất cả' }, ...crops.map(c => ({ value: c, label: cropLabel(c) }))]} />
+          <Select label="Sản phẩm" value={productId} onChange={setProductId} options={[{ value: 'all', label: 'Tất cả' }, ...products.map(p => ({ value: String(p.productId), label: p.name }))]} />
+          <Select label="Thời gian" value={range} onChange={setRange} options={RANGES} />
+        </div>
+
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead>
+              <tr><th>Loại</th><th>Sản phẩm</th><th>Ngày</th><th className="num">Giá thấp nhất</th><th className="num">Giá cao nhất</th><th className="num">So với ngày trước</th></tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={`${r.productId}-${r.date}`}>
+                  <td>{cropLabel(r.crop)}</td>
+                  <td>{r.name}</td>
+                  <td>{showDate(r.date)}</td>
+                  <td className="num">{formatNumber(r.min)} {formatUnit(r.unit)}</td>
+                  <td className="num">{formatNumber(r.max)} {formatUnit(r.unit)}</td>
+                  <td className="num"><Delta change={r.change} variant="pct" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {rows.length === 0 && <p className="pp-none">Không có kết quả phù hợp.</p>}
+        {rows.length > 0 && <p className="panel-foot pp-count">{rows.length} dòng · thay đổi so sánh giá trung bình của ngày với ngày có giá liền trước</p>}
       </section>
     </div>
   )

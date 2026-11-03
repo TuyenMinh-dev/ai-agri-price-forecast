@@ -1,131 +1,125 @@
-import * as mock from '../data/mockData'
+import { addDays } from '../utils/format'
 
+// Toàn bộ lời gọi backend nằm ở file này.
 const BASE_URL = import.meta.env?.VITE_API_URL ?? 'http://127.0.0.1:8000'
-const MODEL = 'Random Forest' // mô hình dùng cho thẻ giá và biểu đồ (đổi tại đây nếu muốn)
-const HISTORY_POINTS = 7
-const FORECAST_POINTS = 3
-const RECENT_DAYS = 30
 
-// Dashboard hiển thị mọi sản phẩm thuộc các nhóm này (tiêu 'pepper' bị bỏ qua)
-const CROPS = { rice: 'Lúa gạo', coffee: 'Cà phê' }
+// Mô hình dùng cho con số "giá dự báo" ở Tổng quan và trang Dự báo (phải khớp model_name của backend)
+export const MAIN_MODEL = 'Random Forest'
 
-async function request(path, params = {}) {
-  const query = new URLSearchParams(params).toString()
-  const res = await fetch(`${BASE_URL}${path}${query ? `?${query}` : ''}`)
-  if (!res.ok) throw new Error(`Lỗi ${res.status} khi gọi ${path}`)
+// "Ngày hiện tại" để tính ngày dự báo (= ngày hiện tại + 1):
+//   'latest' → ngày cập nhật giá cuối cùng của backend
+//   'today'  → ngày trên đồng hồ máy tính
+const FORECAST_BASE = 'latest'
+
+// Số ngày lịch sử tải về (lớn nhất trong các lựa chọn khoảng thời gian)
+export const HISTORY_DAYS = 90
+
+export const CROP_LABELS = { rice: 'Gạo', coffee: 'Cà phê', pepper: 'Hồ tiêu' }
+const CROP_ORDER = Object.keys(CROP_LABELS)
+export const cropLabel = crop => CROP_LABELS[crop] ?? crop
+export const sortCrops = crops => [...crops].sort((a, b) => CROP_ORDER.indexOf(a) - CROP_ORDER.indexOf(b))
+
+// ---------- gọi API ----------
+
+const CACHE_MS = 10_000 // gộp các request trùng nhau (React StrictMode gọi effect 2 lần khi dev)
+const cache = new Map()
+
+async function fetchJson(url, path) {
+  let res
+  try {
+    res = await fetch(url)
+  } catch {
+    throw new Error(`Không kết nối được backend (${BASE_URL})`)
+  }
+  if (!res.ok) throw new Error(`Backend trả lỗi ${res.status} tại ${path}`)
   return res.json()
 }
 
-const mid = row => (Number(row.price_min) + Number(row.price_max)) / 2 // giá = trung bình min/max
-const showDate = iso => iso.split('-').reverse().join('/')              // 2026-09-29 → 29/09/2026
-const lastDate = rows => rows.map(r => r.price_date).sort().at(-1)
-
-// Chỉ lấy lịch sử RECENT_DAYS ngày gần nhất (tính từ ngày có giá mới nhất)
-function startDate(latest) {
-  const d = new Date(lastDate(latest))
-  d.setUTCDate(d.getUTCDate() - RECENT_DAYS)
-  return d.toISOString().slice(0, 10)
+function request(path, params = {}) {
+  const query = new URLSearchParams(params).toString()
+  const url = `${BASE_URL}${path}${query ? `?${query}` : ''}`
+  const hit = cache.get(url)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.promise
+  const promise = fetchJson(url, path).catch(err => {
+    cache.delete(url)
+    throw err
+  })
+  cache.set(url, { at: Date.now(), promise })
+  return promise
 }
 
-export async function getDashboardData() {
-  const latest = await request('/api/prices/latest')
-  if (!latest.length) return { products: [] }
+// Giá trả về dạng chuỗi ("8700.00") → số; giá trung bình ngày = (thấp nhất + cao nhất) / 2
+function toPriceRow(r) {
+  const min = Number(r.price_min)
+  const max = Number(r.price_max)
+  return { date: r.price_date, min, max, avg: (min + max) / 2 }
+}
 
-  const [history, forecasts] = await Promise.all([
-    request('/api/prices/history', { crop_type: 'rice', start_date: startDate(latest) }),
-    request('/api/forecasts', { crop_type: 'rice' }),
+// GET /api/prices/latest → giá mới nhất của từng sản phẩm
+export async function getLatestPrices() {
+  const raw = await request('/api/prices/latest')
+  return raw
+    .map(p => ({ productId: p.product_id, crop: p.crop_type, name: p.category, unit: p.unit, source: p.source, ...toPriceRow(p) }))
+    .sort((a, b) => a.productId - b.productId)
+}
+
+// GET /api/prices/history → lịch sử giá (mỗi sản phẩm một danh sách, cũ → mới)
+export async function getPriceHistory(startDate) {
+  const raw = await request('/api/prices/history', startDate ? { start_date: startDate } : {})
+  return raw.map(h => ({
+    productId: h.product_id,
+    crop: h.crop_type,
+    name: h.category,
+    rows: h.history.map(toPriceRow).sort((a, b) => a.date.localeCompare(b.date)),
+  }))
+}
+
+// GET /api/forecasts → dự báo của các mô hình
+export async function getForecasts() {
+  const raw = await request('/api/forecasts')
+  return raw.map(f => ({
+    productId: f.product_id,
+    crop: f.crop_type,
+    name: f.category,
+    date: f.forecast_date,
+    price: Number(f.predicted_price),
+    model: f.model_name,
+  }))
+}
+
+// ---------- gộp dữ liệu cho từng trang ----------
+
+const newestDate = rows => rows.map(r => r.date).sort().at(-1) ?? null
+
+export function forecastDateFor(lastDate) {
+  const base = FORECAST_BASE === 'today' ? new Date().toLocaleDateString('en-CA') : lastDate
+  return addDays(base, 1)
+}
+
+async function load({ history = false, forecasts = false }) {
+  const latest = await getLatestPrices()
+  const lastDate = newestDate(latest)
+  const [historyData, forecastData] = await Promise.all([
+    history && lastDate ? getPriceHistory(addDays(lastDate, -(HISTORY_DAYS - 1))) : [],
+    forecasts ? getForecasts() : [],
   ])
-
-  const products = []
-  const charts = {}
-  const comparison = []
-  const modelNames = new Set()
-
-  for (const item of latest.filter(p => p.crop_type === 'rice')) {
-    const id = `p${item.product_id}`
-    const label = `${CROPS[item.crop_type]} · ${item.category}`
-
-    // lịch sử: API trả mới → cũ, biểu đồ cần cũ → mới
-    const rows = history.find(h => h.product_id === item.product_id)?.history ?? []
-    const past = rows.length ? rows.slice(0, HISTORY_POINTS).reverse() : [item]
-
-    // dự báo theo từng mô hình, sắp xếp theo ngày tăng dần
-    const byModel = {}
-    forecasts
-      .filter(f => f.product_id === item.product_id)
-      .sort((a, b) => a.forecast_date.localeCompare(b.forecast_date))
-      .forEach(f => {
-        (byModel[f.model_name] ??= []).push(f)
-        modelNames.add(f.model_name)
-      })
-
-    // chỉ coi là "dự báo" những ngày sau ngày có giá cuối cùng
-    const futureOf = list => list.filter(f => f.forecast_date > item.price_date).slice(0, FORECAST_POINTS)
-    const pick = list => futureOf(list).at(-1) ?? list.at(-1)
-
-    const modelRows = byModel[MODEL] ?? Object.values(byModel)[0] ?? []
-    const future = futureOf(modelRows)
-    const target = pick(modelRows)
-    const current = mid(item)
-    const predicted = target ? Number(target.predicted_price) : null
-
-    let note = null
-    if (!modelRows.length) note = 'Backend chưa trả dự báo cho sản phẩm này (kiểm tra /api/forecasts).'
-    else if (!future.length) note = `Các dự báo hiện có đều không sau ngày giá mới nhất (${showDate(item.price_date)}) nên không vẽ đường dự báo.`
-
-    products.push({
-      id,
-      group: item.crop_type,
-      name: label,
-      short: item.category,
-      current,
-      predicted,
-      predictedDate: target ? showDate(target.forecast_date).slice(0, 5) : null,
-      change: predicted == null ? null : ((predicted - current) / current) * 100,
-      confidence: null, // backend chưa có độ tin cậy
-      modelName: target?.model_name ?? null,
-    })
-
-    charts[id] = {
-      dates: [...past.map(r => showDate(r.price_date)), ...future.map(f => showDate(f.forecast_date))],
-      past: past.map(mid),
-      pred: future.map(f => Number(f.predicted_price)),
-      note,
-    }
-
-    comparison.push({
-      name: label,
-      current,
-      trend: predicted == null ? null : predicted >= current ? 'up' : 'down',
-      models: Object.fromEntries(Object.entries(byModel).map(([m, list]) => [m, Number(pick(list).predicted_price)])),
-    })
-  }
-
   return {
-    lastUpdated: showDate(lastDate(latest)),
-    products,
-    charts,
-    comparison,
-    models: [...modelNames].sort(),
+    latest,
+    lastDate,
+    history: historyData,
+    forecasts: forecastData,
+    targetDate: lastDate ? forecastDateFor(lastDate) : null,
   }
 }
 
-export async function getPriceList() {
-  const latest = await request('/api/prices/latest')
-  if (!latest.length) return { groups: [], typesByGroup: {}, rows: [] }
+export const loadOverview = () => load({ history: true, forecasts: true })
+export const loadPrices = () => load({ history: true })
+export const loadForecast = () => load({ forecasts: true })
 
-  const history = (await request('/api/prices/history', { start_date: startDate(latest) })).filter(h => CROPS[h.crop_type])
-
-  const rows = history
-    .flatMap(h => h.history.map(r => ({ group: h.crop_type, type: h.category, date: r.price_date, min: Number(r.price_min), max: Number(r.price_max) })))
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .map(r => ({ ...r, date: showDate(r.date) }))
-
-  const typesByGroup = {}
-  for (const h of history) {
-    const list = (typesByGroup[h.crop_type] ??= [])
-    if (!list.includes(h.category)) list.push(h.category)
-  }
-
-  return { groups: mock.groups.filter(g => typesByGroup[g.id]), typesByGroup, rows }
+// Dự báo của một sản phẩm trong ngày `date`, ưu tiên mô hình chính
+export function forecastsOf(forecasts, productId, date) {
+  return forecasts.filter(f => f.productId === productId && f.date === date)
+}
+export function mainForecast(rows) {
+  return rows.find(f => f.model === MAIN_MODEL) ?? rows[0] ?? null
 }

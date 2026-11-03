@@ -1,63 +1,48 @@
-import { useEffect, useState } from 'react'
-import PriceCard from '../components/PriceCard/PriceCard'
-import PriceChart from '../components/PriceChart/PriceChart'
-import ComparisonTable from '../components/ComparisonTable/ComparisonTable'
-import { getDashboardData } from '../api/priceApi'
-import { matchesQuery } from '../utils/format'
+import PageState from '../components/PageState/PageState'
+import PriceBoard from '../components/PriceBoard/PriceBoard'
+import PriceTrend from '../components/PriceChart/PriceTrend'
+import useApi from '../utils/useApi'
+import { forecastsOf, loadOverview, mainForecast } from '../api/priceApi'
+import { lastChange, seriesFor } from '../utils/market'
+import { showDate } from '../utils/format'
 import './Dashboard.css'
 
-export default function Dashboard({ query }) {
-  const [productId, setProductId] = useState(null)
-  const [state, setState] = useState({ status: 'loading', data: null })
+export default function Dashboard() {
+  const { status, data, error } = useApi(loadOverview)
+  const empty = status === 'ready' && data.latest.length === 0 && 'Backend chưa có dữ liệu giá.'
+  if (status !== 'ready' || empty) return <PageState status={status} error={error} empty={empty} />
 
-  useEffect(() => {
-    getDashboardData()
-      .then(data => setState({ status: data?.products?.length ? 'ready' : 'empty', data }))
-      .catch(() => setState({ status: 'error', data: null }))
-  }, [])
+  const { latest, history, forecasts, lastDate, targetDate } = data
+  const rice = latest.filter(p => p.crop === 'rice')
 
-  const { status, data } = state
-  if (status === 'loading') return <p className="dash-status">Đang tải dữ liệu...</p>
-  if (status === 'error') return <p className="dash-status down">Không tải được dữ liệu từ backend. Hãy kiểm tra backend đã chạy chưa rồi tải lại trang.</p>
-  if (status === 'empty') return <p className="dash-status">Chưa có dữ liệu giá lúa gạo để hiển thị.</p>
-
-  const visible = data.products.filter(p => matchesQuery(p.name, query))
-  const selected = visible.find(p => p.id === productId) ?? visible[0]
+  // Mỗi loại gạo: chuỗi giá, thay đổi so với ngày trước, dự báo của ngày hiện tại + 1
+  const rows = rice.map(product => {
+    const series = seriesFor(history, product)
+    return {
+      product,
+      series,
+      change: lastChange(series),
+      forecast: mainForecast(forecastsOf(forecasts, product.productId, targetDate)),
+    }
+  })
 
   return (
-    <div className="dash">
-      <div className="dash-head">
+    <div className="page">
+      <div className="page-head">
         <div>
-          <h1>Dự đoán giá lúa gạo</h1>
-          <p>Theo dõi giá thị trường và dự báo xu hướng bằng dữ liệu</p>
+          <h1>Tổng quan thị trường gạo</h1>
+          <p>Giá mới nhất, mức thay đổi và dự báo ngày mai của từng loại gạo</p>
         </div>
-        <span className="dash-updated">Cập nhật lần cuối: {data.lastUpdated}</span>
+        <span className="page-meta">Cập nhật: {showDate(lastDate)}</span>
       </div>
 
-      {visible.length === 0 ? (
-        <p className="dash-status">Không tìm thấy sản phẩm nào khớp với "{query.trim()}".</p>
+      {rice.length === 0 ? (
+        <p className="dash-empty">Backend chưa có dữ liệu giá gạo (crop_type = rice).</p>
       ) : (
-        <>
-          <div className="dash-cards">
-            {visible.map(p => <PriceCard key={p.id} {...p} />)}
-          </div>
-
-          {visible.length > 1 && (
-            <div className="dash-select">
-              <span>Xem biểu đồ:</span>
-              <div className="dash-tabs">
-                {visible.map(p => (
-                  <button key={p.id} className={selected.id === p.id ? 'on' : ''} onClick={() => setProductId(p.id)}>{p.short}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <PriceChart name={selected.name} confidence={selected.confidence} modelName={selected.modelName} {...data.charts[selected.id]} />
-
-          <ComparisonTable rows={data.comparison.filter(r => matchesQuery(r.name, query))} models={data.models} />
-        </>
+        <PriceBoard title="Giá gạo mới nhất" rows={rows} targetDate={targetDate} />
       )}
+
+      <PriceTrend title="Biểu đồ giá" latest={latest} history={history} />
     </div>
   )
 }

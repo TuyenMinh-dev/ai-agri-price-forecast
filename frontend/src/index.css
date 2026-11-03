@@ -1,21 +1,76 @@
+/* AGRISIGHT — màu lấy từ ruộng lúa: xanh mạ (nhận diện), nền xám xanh như sương đồng,
+   màu bông lúa chín chỉ dùng để đánh dấu số liệu dự báo. */
 :root, [data-theme="light"] {
-  --bg: #F5F7F5; --card-bg: #FFFFFF; --border: #D6DDD6; --head-bg: #F0F4F0;
-  --primary: #2E7D32; --primary-dark: #1B5E20; --primary-light: #E8F5E9; --accent: #43A047; --on-primary: #FFFFFF;
-  --text: #1F2937; --muted: #667085;
-  --up: #2E7D32; --down: #C62828; --warning: #D97706;
-  --hover: rgba(46, 125, 50, 0.06);
+  --paper: #ECEFE8;      /* nền trang */
+  --surface: #FBFCFA;    /* bảng, panel */
+  --rule: #D3D9CE;       /* đường viền */
+  --rule-soft: #E3E8DD;  /* đường kẻ giữa các dòng */
+  --head: #E6EBE0;       /* nền hàng tiêu đề bảng */
+  --hover: rgba(30, 90, 58, 0.06);
+
+  --ink: #1A2A20;
+  --ink-2: #5A695F;
+
+  --brand: #1E5A3A;
+  --brand-ink: #FFFFFF;
+  --brand-soft: #DDEADF;
+
+  --up: #17803F;
+  --down: #C0392B;
+  --flat: #66726A;
+  --on-dir: #FFFFFF;     /* chữ trên nền màu tăng/giảm */
+
+  --wheat: #F3EBD3;      /* nền ô dự báo */
+  --wheat-ink: #6B5416;
+  --warn: #A8620C;
 }
 [data-theme="dark"] {
-  --bg: #111713; --card-bg: #1B241D; --border: #344238; --head-bg: #222D25;
-  --primary: #4CAF50; --primary-dark: #388E3C; --primary-light: #1F3A24; --accent: #66BB6A; --on-primary: #0F1A12;
-  --text: #E8F0E9; --muted: #AAB8AD;
-  --up: #4CAF50; --down: #EF5350; --warning: #F59E0B;
-  --hover: rgba(76, 175, 80, 0.1);
+  --paper: #111812;
+  --surface: #19231C;
+  --rule: #2F3D33;
+  --rule-soft: #26322B;
+  --head: #1F2B23;
+  --hover: rgba(108, 195, 138, 0.09);
+
+  --ink: #E5EDE7;
+  --ink-2: #A3B2A8;
+
+  --brand: #6CC38A;
+  --brand-ink: #0E1A12;
+  --brand-soft: #203528;
+
+  --up: #4CC27A;
+  --down: #F07167;
+  --flat: #93A097;
+  --on-dir: #0E1A12;
+
+  --wheat: #2B2815;
+  --wheat-ink: #D9C27A;
+  --warn: #E6A04A;
 }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { min-width: 1440px; background: var(--bg); color: var(--text); font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; transition: background 0.2s, color 0.2s; }
+html { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+body {
+  min-width: 1024px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
+}
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-input { font: inherit; color: inherit; }
-.mono { font-family: Consolas, monospace; }
+input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.tnum { font-variant-numeric: tabular-nums; }
 .up { color: var(--up); }
 .down { color: var(--down); }
+.flat { color: var(--flat); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
