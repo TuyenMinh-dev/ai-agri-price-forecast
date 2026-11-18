@@ -125,12 +125,34 @@ def main():
     session = SessionLocal()
     try:
         all_forecasts = []
+        latest_system_date = df["price_date"].max()
+        print(f"Ngay cap nhat gia moi nhat cua he thong: {latest_system_date.date()}")
+
         for product_id, group in df.groupby("product_id"):
             category = group["category"].iloc[0]
+            cat_latest_date = group["price_date"].max()
+
+            # 1. Chi du bao cho loai gao con dang duoc niem yet o dot moi nhat
+            if cat_latest_date < latest_system_date:
+                days_inactive = (latest_system_date - cat_latest_date).days
+                print(
+                    f"  [Bo qua] {category:<12}: Da ngung cap nhat tren web tu {cat_latest_date.date()} "
+                    f"({days_inactive} ngay truoc) -> Khong du bao."
+                )
+                continue
+
+            # 2. Chi du bao khi da co du du lieu toi thieu (>= 5 ngay)
+            if len(group) < 5:
+                print(
+                    f"  [Bo qua] {category:<12}: Loai moi xuat hien, chua du du lieu train "
+                    f"({len(group)} ngay < 5 ngay) -> Khong du bao."
+                )
+                continue
+
             cat_forecasts = forecast_category(product_id, group, features)
 
             if not cat_forecasts:
-                print(f"  Bo qua {category}: chua du du lieu de train (can >= 2 dong sau khi tao feature).")
+                print(f"  [Bo qua] {category}: chua du du lieu de train (can >= 2 dong sau khi tao feature).")
                 continue
 
             steps = cat_forecasts[0]["steps_used"]
