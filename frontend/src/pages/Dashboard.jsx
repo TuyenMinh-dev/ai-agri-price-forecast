@@ -1,4 +1,4 @@
-import PageState from '../components/PageState/PageState'
+﻿import PageState from '../components/PageState/PageState'
 import PriceBoard from '../components/PriceBoard/PriceBoard'
 import PriceTrend from '../components/PriceChart/PriceTrend'
 import useApi from '../utils/useApi'
@@ -13,7 +13,16 @@ export default function Dashboard() {
   if (status !== 'ready' || empty) return <PageState status={status} error={error} empty={empty} />
 
   const { latest, history, forecasts, lastDate, targetDate } = data
-  const rice = latest.filter(p => p.crop === 'rice')
+  // Chi hien thi nhung loai gao co gia o dot moi nhat (dong nhat voi vietnambiz)
+    // Ngay cap nhat moi nhat cua rieng mat hang gao
+  const latestRiceDate = latest
+    .filter(p => p.crop === 'rice')
+    .map(p => p.date)
+    .sort()
+    .at(-1)
+
+  // Chi lay cac loai gao co gia o dot moi nhat (trung voi vietnambiz)
+  const rice = latest.filter(p => p.crop === 'rice' && p.date === latestRiceDate)
 
   // Mỗi loại gạo: chuỗi giá, thay đổi so với ngày trước, dự báo của ngày hiện tại + 1
   const rows = rice.map(product => {
@@ -46,3 +55,5 @@ export default function Dashboard() {
     </div>
   )
 }
+
+

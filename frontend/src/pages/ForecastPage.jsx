@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import ComparisonTable from '../components/ComparisonTable/ComparisonTable'
 import PageState from '../components/PageState/PageState'
 import Select from '../components/Select/Select'
@@ -53,13 +53,24 @@ export default function ForecastPage() {
       ) : (
         <section className="panel">
           <header className="panel-head"><h2>So sánh mô hình</h2></header>
-          <p className="note fc-missing">
-            {otherDates.length === 0
-              ? `Backend chưa có dự báo nào cho ${cropLabel(product.crop)} – ${product.name} (product_id ${product.productId}).`
-              : `Backend chưa có dự báo cho ngày ${showDate(targetDate)}. Các ngày dự báo hiện có: ${otherDates.map(showDate).join(', ')}.`}
-          </p>
+          {product.date < lastDate ? (
+            <div className="note fc-missing" style={{ lineHeight: '1.6', padding: '16px' }}>
+              <span style={{ color: '#e5a50a', display: 'block', marginBottom: '8px', fontSize: '15px', fontWeight: 'bold' }}>
+                ℹ️ Thông báo thị trường:
+              </span>
+              Mặt hàng <strong>{cropLabel(product.crop)} – {product.name}</strong> hiện đã tạm dừng niêm yết trên trang nguồn 
+              (ngày ghi nhận giá cuối cùng là <strong>{showDate(product.date)}</strong>).
+              <br />
+              Để đảm bảo độ chính xác và tính khách quan khoa học, hệ thống <strong>chủ động không tạo dự báo</strong> đối với các chủng loại đã ngừng giao dịch thực tế.
+            </div>
+          ) : (
+            <p className="note fc-missing">
+              Chưa có dữ liệu dự báo cho ngày {showDate(targetDate)}.
+            </p>
+          )}
         </section>
       )}
     </div>
   )
 }
+

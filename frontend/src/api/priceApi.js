@@ -1,10 +1,12 @@
-import { addDays } from '../utils/format'
+﻿import { addDays } from '../utils/format'
 
 // Toàn bộ lời gọi backend nằm ở file này.
 const BASE_URL = import.meta.env?.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 // Mô hình dùng cho con số "giá dự báo" ở Tổng quan và trang Dự báo (phải khớp model_name của backend)
-export const MAIN_MODEL = 'Random Forest'
+// Danh sach mo hinh xep theo thu tu hieu nang tot nhat tu danh gia thuc nghiem
+export const PREFERRED_MODELS = ['Linear Regression', 'Naive', 'Random Forest', 'XGBoost', 'LSTM']
+export const MAIN_MODEL = PREFERRED_MODELS[0]
 
 // "Ngày hiện tại" để tính ngày dự báo (= ngày hiện tại + 1):
 //   'latest' → ngày cập nhật giá cuối cùng của backend
@@ -121,5 +123,13 @@ export function forecastsOf(forecasts, productId, date) {
   return forecasts.filter(f => f.productId === productId && f.date === date)
 }
 export function mainForecast(rows) {
-  return rows.find(f => f.model === MAIN_MODEL) ?? rows[0] ?? null
+  if (!rows || rows.length === 0) return null
+  // Tu dong uu tien mo hinh tot nhat hien co trong ket qua du bao
+  for (const preferred of PREFERRED_MODELS) {
+    const match = rows.find(f => f.model === preferred)
+    if (match) return match
+  }
+  return rows[0]
 }
+
+
