@@ -1,6 +1,6 @@
 
-import sys
 from pathlib import Path
+import sys
 
 import pandas as pd
 
@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 sys.path.append(str(BASE_DIR / "backend"))
 
 from app.db.session import SessionLocal
-from app.models.tables import Product, MarketPrice
+from app.models.tables import MarketPrice, Product
 
 CRAWLER_FILES = [
     {
@@ -30,7 +30,7 @@ CRAWLER_FILES = [
 
 
 def get_or_create_product(session, crop_type: str, category: str, unit: str) -> Product:
-    """Tìm product đã có (theo crop_type + category), nếu chưa có thì tạo mới."""
+    """Tim product da co (theo crop_type + category), neu chua co thi tao moi."""
     product = (
         session.query(Product)
         .filter_by(crop_type=crop_type, category=category)
@@ -53,25 +53,39 @@ def load_file(session, file_info: dict):
     new_count = 0
     skip_count = 0
 
+    # Cache cac product da co trong DB theo category de tranh query lien tuc
+    existing_products = {
+        p.category: p
+        for p in session.query(Product)
+        .filter_by(crop_type=file_info["crop_type"])
+        .all()
+    }
+
+    # Cache tat ca (product_id, price_date, source) da co vao memory set
+    existing_records = set(
+        (mp.product_id, str(mp.price_date), str(mp.source))
+        for mp in session.query(
+            MarketPrice.product_id, MarketPrice.price_date, MarketPrice.source
+        ).all()
+    )
+
+    new_prices = []
     for _, row in df.iterrows():
         category = str(row["category"]).strip()
-        product = get_or_create_product(
-            session, file_info["crop_type"], category, file_info["unit"]
-        )
-
-        existing = (
-            session.query(MarketPrice)
-            .filter_by(
-                product_id=product.id,
-                price_date=row["price_date"],
-                source=row["source"],
+        if category in existing_products:
+            product = existing_products[category]
+        else:
+            product = get_or_create_product(
+                session, file_info["crop_type"], category, file_info["unit"]
             )
-            .first()
-        )
-        if existing:
+            existing_products[category] = product
+
+        key = (product.id, str(row["price_date"]), str(row["source"]))
+        if key in existing_records:
             skip_count += 1
             continue
 
+        existing_records.add(key)
         price = MarketPrice(
             product_id=product.id,
             price_date=row["price_date"],
@@ -79,8 +93,12 @@ def load_file(session, file_info: dict):
             price_max=row["price_max"] if pd.notna(row["price_max"]) else None,
             source=row["source"],
         )
-        session.add(price)
+        new_prices.append(price)
         new_count += 1
+
+    if new_prices:
+        session.add_all(new_prices)
+        session.flush()
 
     return new_count, skip_count
 
