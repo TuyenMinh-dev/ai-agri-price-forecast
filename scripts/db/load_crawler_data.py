@@ -46,7 +46,7 @@ def get_or_create_product(session, crop_type: str, category: str, unit: str) -> 
 def load_file(session, file_info: dict):
     path = file_info["path"]
     if not path.exists():
-        print(f"  Bỏ qua - không tìm thấy file: {path}")
+        print(f"  Bo qua - khong tim thay file: {path}")
         return 0, 0
 
     df = pd.read_csv(path)
@@ -91,14 +91,14 @@ def main():
         total_new = 0
         total_skip = 0
         for file_info in CRAWLER_FILES:
-            print(f"Đang nạp: {file_info['path'].name}")
+            print(f"Dang nap: {file_info['path'].name}")
             new_count, skip_count = load_file(session, file_info)
-            print(f"  -> {new_count} dòng mới, {skip_count} dòng đã có (bỏ qua)")
+            print(f"  -> {new_count} dong moi, {skip_count} dong da co (bo qua)")
             total_new += new_count
             total_skip += skip_count
 
         session.commit()
-        print(f"\nHoàn tất. Tổng: {total_new} dòng mới, {total_skip} dòng đã tồn tại.")
+        print(f"\nHoan tat. Tong: {total_new} dong moi, {total_skip} dong da ton tai.")
     except Exception:
         session.rollback()
         raise
