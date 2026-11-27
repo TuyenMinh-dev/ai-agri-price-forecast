@@ -1,4 +1,7 @@
 import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -60,15 +63,15 @@ def forecast_lstm(product_id, group, steps):
 
     # 2. Kiểm tra dữ liệu đủ để huấn luyện
     if not np.isfinite(prices).all():
-        print(f"Product {product_id}: Có giá trị giá không hợp lệ (NaN/inf)")
+        print(f"Product {product_id}: Co gia tri gia khong hop le (NaN/inf)")
         return None
 
     if np.any(prices <= 0):
-        print(f"Product {product_id}: Có giá không hợp lệ (<= 0)")
+        print(f"Product {product_id}: Co gia khong hop le (<= 0)")
         return None
 
     if len(prices) <= LSTM_WINDOW:
-        print(f"Product {product_id}: Không đủ dữ liệu cho LSTM")
+        print(f"Product {product_id}: Khong du du lieu cho LSTM")
         return None
 
     # 3. Chuẩn hóa giá về khoảng 0 đến 1
