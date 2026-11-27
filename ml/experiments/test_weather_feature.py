@@ -62,13 +62,22 @@ def load_weather_data(region: str = "Dong bang song Cuu Long") -> pd.DataFrame:
 
 
 def add_weather_features(df: pd.DataFrame, weather_df: pd.DataFrame) -> pd.DataFrame:
-    """Gan them cot thoi tiet theo dung ngay. Ngay nao thieu du lieu thoi
-    tiet (do NASA xu ly tre) thi lay tam gia tri gan nhat truoc do (ffill)."""
-    merged = df.merge(weather_df, left_on="price_date", right_on="weather_date", how="left")
-    merged = merged.drop(columns=["weather_date"])
-    merged[WEATHER_FEATURES] = merged.groupby("category")[WEATHER_FEATURES].transform(
-        lambda s: s.ffill().bfill()
+    """Gan du lieu thoi tiet theo ngay, chi dien du lieu tu ngay truoc do."""
+    df = df.sort_values(["category", "price_date"]).copy()
+
+    merged = df.merge(
+        weather_df,
+        left_on="price_date",
+        right_on="weather_date",
+        how="left"
     )
+
+    merged = merged.drop(columns=["weather_date"])
+
+    merged[WEATHER_FEATURES] = merged.groupby("category")[WEATHER_FEATURES].transform(
+        lambda s: s.ffill()
+    )
+
     return merged
 
 
@@ -140,8 +149,22 @@ def main():
         print(f"Luu y: bo {rows_before - rows_after} dong khong co du lieu thoi tiet du dung (ngay qua xa khong noi suy duoc).")
 
     print("\n================ SO SANH KET QUA ================")
-    run_experiment(features, BASE_FEATURES, "KHONG co thoi tiet (baseline hien tai)")
-    run_experiment(features_with_weather, BASE_FEATURES + WEATHER_FEATURES, "CO them thoi tiet")
+    print("Khoang ngay gia:", features["price_date"].min(), "->", features["price_date"].max())
+    print("Khoang ngay thoi tiet:", weather_df["weather_date"].min(), "->", weather_df["weather_date"].max())
+    print("So dong dung de so sanh:", len(features_with_weather))
+    print("So ngay gia bi loai:", len(features) - len(features_with_weather))
+    # Ca hai thi nghiem su dung cung mot tap du lieu
+    run_experiment(
+        features_with_weather,
+        BASE_FEATURES,
+        "KHONG co thoi tiet (baseline)"
+    )
+
+    run_experiment(
+        features_with_weather,
+        BASE_FEATURES + WEATHER_FEATURES,
+        "CO them thoi tiet"
+    )
 
 
 if __name__ == "__main__":
