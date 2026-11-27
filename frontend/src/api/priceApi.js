@@ -11,7 +11,7 @@ export const MAIN_MODEL = PREFERRED_MODELS[0]
 // "Ngày hiện tại" để tính ngày dự báo (= ngày hiện tại + 1):
 //   'latest' → ngày cập nhật giá cuối cùng của backend
 //   'today'  → ngày trên đồng hồ máy tính
-const FORECAST_BASE = 'latest'
+const FORECAST_BASE = 'today'
 
 // Số ngày lịch sử tải về (lớn nhất trong các lựa chọn khoảng thời gian)
 export const HISTORY_DAYS = 90

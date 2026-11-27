@@ -6,12 +6,22 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
-
+import numpy as np
+import torch
+from sklearn.preprocessing import MinMaxScaler
 BASE_DIR = Path(__file__).resolve().parents[2]
 sys.path.append(str(BASE_DIR / "ml" / "features"))
 sys.path.append(str(BASE_DIR / "backend"))
 
 from build_features import load_price_data, build_features
+from train_baseline import (
+    PriceLSTM,
+    set_seed,
+    LSTM_WINDOW,
+    LSTM_EPOCHS,
+    LSTM_HIDDEN,
+    LSTM_LR,
+)
 from app.db.session import SessionLocal
 from app.models.tables import Forecast
 
@@ -37,12 +47,127 @@ def steps_needed_to_reach_tomorrow(last_known_date) -> int:
     steps = (target_date - last_date).days
     return max(steps, 1)
 
+def forecast_lstm(product_id, group, steps):
+    """
+    Huấn luyện mô hình LSTM từ dữ liệu giá lịch sử
+    và dự đoán giá trong tương lai.
+    """
+
+    # 1. Sắp xếp dữ liệu theo ngày
+    group = group.sort_values("price_date")
+
+    prices = group["price_avg"].to_numpy(dtype=float)
+
+    # 2. Kiểm tra dữ liệu đủ để huấn luyện
+    if not np.isfinite(prices).all():
+        print(f"Product {product_id}: Có giá trị giá không hợp lệ (NaN/inf)")
+        return None
+
+    if np.any(prices <= 0):
+        print(f"Product {product_id}: Có giá không hợp lệ (<= 0)")
+        return None
+
+    if len(prices) <= LSTM_WINDOW:
+        print(f"Product {product_id}: Không đủ dữ liệu cho LSTM")
+        return None
+
+    # 3. Chuẩn hóa giá về khoảng 0 đến 1
+    scaler = MinMaxScaler()
+
+    scaled_prices = scaler.fit_transform(
+        prices.reshape(-1, 1)
+    ).flatten()
+
+    # 4. Tạo dữ liệu huấn luyện theo cửa sổ thời gian
+    X_train = []
+    y_train = []
+
+    for i in range(len(scaled_prices) - LSTM_WINDOW):
+        X_train.append(
+            scaled_prices[i:i + LSTM_WINDOW]
+        )
+        y_train.append(
+            scaled_prices[i + LSTM_WINDOW]
+        )
+
+    X_train = np.array(X_train, dtype=np.float32)
+    y_train = np.array(y_train, dtype=np.float32)
+
+    X_tensor = torch.tensor(X_train).unsqueeze(-1)
+    y_tensor = torch.tensor(y_train)
+
+    # 5. Khởi tạo mô hình LSTM
+    set_seed()
+
+    model = PriceLSTM(
+        input_size=1,
+        hidden_size=LSTM_HIDDEN
+    )
+
+    criterion = torch.nn.MSELoss()
+
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=LSTM_LR
+    )
+
+    # 6. Huấn luyện mô hình
+    model.train()
+
+    for epoch in range(LSTM_EPOCHS):
+        optimizer.zero_grad()
+
+        predictions = model(X_tensor)
+
+        loss = criterion(predictions, y_tensor)
+
+        loss.backward()
+        optimizer.step()
+
+    # 7. Dự đoán đệ quy các ngày tiếp theo
+    model.eval()
+
+    sequence = scaled_prices[-LSTM_WINDOW:].copy()
+
+    with torch.no_grad():
+        for _ in range(steps):
+
+            input_tensor = torch.tensor(
+                sequence,
+                dtype=torch.float32
+            ).reshape(1, LSTM_WINDOW, 1)
+
+            predicted_scaled = model(input_tensor).item()
+
+            sequence = np.append(
+                sequence[1:],
+                predicted_scaled
+            )
+
+    # 8. Chuyển kết quả về giá ban đầu
+    predicted_price = scaler.inverse_transform(
+        np.array([[predicted_scaled]])
+    )[0, 0]
+
+    last_date = group["price_date"].max()
+
+    forecast_date = (
+        pd.Timestamp(last_date) + pd.Timedelta(days=steps)
+    ).date()
+
+    return {
+        "product_id": product_id,
+        "forecast_date": forecast_date,
+        "predicted_price": round(float(predicted_price), 2),
+        "model_name": "LSTM",
+        "steps_used": steps
+    }
 
 def forecast_category(product_id: int, group: pd.DataFrame, features: pd.DataFrame) -> list[dict]:
-    """Train 3 model bang TOAN BO du lieu cua 1 category, du doan gia cho
-    DUNG ngay mai that - neu du lieu dang bi thieu vai ngay thi tu dong du
-    bao de quy nhieu buoc de bu lai, khong con bi 'dung' o ngay cu."""
+    """Train 3 model cu va LSTM, du doan gia cho ngay mai."""
+
     cat_features = features[features["product_id"] == product_id]
+
     if cat_features.empty:
         return []
 
@@ -53,41 +178,49 @@ def forecast_category(product_id: int, group: pd.DataFrame, features: pd.DataFra
     steps = steps_needed_to_reach_tomorrow(group["price_date"].max())
 
     results = []
+
+    # 1. Chay 3 mo hinh Machine Learning
     for model_name, build_model in MODEL_BUILDERS.items():
         model = build_model()
         model.fit(X_train, y_train)
 
-        # Du bao de quy: moi buoc dung chinh ket qua buoc truoc lam input -
-        # neu steps == 1 (truong hop binh thuong) thi chi chay dung 1 lan,
-        # ket qua y het cach lam cu.
         step_prices = group["price_avg"].tolist()
         step_dates = list(group["price_date"])
         predicted_price = None
+
         for _ in range(steps):
             next_date = step_dates[-1] + pd.Timedelta(days=1)
             last3 = step_prices[-3:]
-            row = pd.DataFrame(
-                [
-                    {
-                        "lag_1": step_prices[-1],
-                        "rolling_mean_3": sum(last3) / len(last3),
-                        "day_of_week": next_date.dayofweek,
-                    }
-                ]
+
+            row = pd.DataFrame([
+                {
+                    "lag_1": step_prices[-1],
+                    "rolling_mean_3": sum(last3) / len(last3),
+                    "day_of_week": next_date.dayofweek,
+                }
+            ])
+
+            predicted_price = float(
+                model.predict(row[FEATURE_COLUMNS])[0]
             )
-            predicted_price = float(model.predict(row[FEATURE_COLUMNS])[0])
+
             step_prices.append(predicted_price)
             step_dates.append(next_date)
 
-        results.append(
-            {
-                "product_id": product_id,
-                "forecast_date": step_dates[-1].date(),
-                "predicted_price": round(predicted_price, 2),
-                "model_name": model_name,
-                "steps_used": steps,
-            }
-        )
+        results.append({
+            "product_id": product_id,
+            "forecast_date": step_dates[-1].date(),
+            "predicted_price": round(predicted_price, 2),
+            "model_name": model_name,
+            "steps_used": steps,
+        })
+
+    # 2. Chay mo hinh LSTM
+    lstm_result = forecast_lstm(product_id, group, steps)
+
+    if lstm_result is not None:
+        results.append(lstm_result)
+
     return results
 
 
