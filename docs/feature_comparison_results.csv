@@ -1,0 +1,5 @@
+feature_set,model,mae,rmse,train_samples,test_samples
+Baseline,Linear Regression,44.65,96.08,956,231
+Enhanced,Linear Regression,45.33,96.13,956,231
+Baseline,Random Forest,87.96,144.45,956,231
+Enhanced,Random Forest,99.35,161.17,956,231

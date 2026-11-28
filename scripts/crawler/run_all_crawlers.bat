@@ -13,4 +13,12 @@ python pepper\crawl_pepper.py
 echo [%date% %time%] Bat dau crawl gia ca phe ...
 python coffee\crawl_coffee.py
 
+echo [%date% %time%] Dang nap du lieu vao CSDL ...
+cd /d "%~dp0..\db"
+python load_crawler_data.py
+
+echo [%date% %time%] Dang lay du lieu thoi tiet (NASA POWER) ...
+python "%~dp0..\data_external\fetch_weather_data.py"
+
+python "%~dp0..\..\ml\models\generate_forecast.py"
 echo [%date% %time%] Hoan tat crawl du lieu ngay hom nay.
